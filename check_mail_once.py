@@ -15,7 +15,8 @@ Debug 模式（環境變數 DEBUG_MODE=true）：
 import imaplib
 import email
 from email.header import decode_header
-from datetime import date
+from email.utils import parsedate_to_datetime
+from datetime import date, timedelta
 import re
 import os
 import sys
@@ -128,8 +129,59 @@ def check_mail_once() -> None:
             print(body[:500])
             print("--------------------------------------------")
 
-    mail.logout()
-    print(f"完成，共推播 {sent_count} 則")
+    if sent_count == 0:
+        print("今天沒有成交回報，改查詢過去7天...")
+        rows = fetch_recent_trades(mail, days=7)
+        mail.logout()
+        send_line_message(build_no_trade_report(rows))
+        print(f"已發送「今天沒交易」通知，附上過去7天 {len(rows)} 筆紀錄")
+    else:
+        mail.logout()
+        print(f"完成，共推播 {sent_count} 則")
+
+
+def fetch_recent_trades(mail, days: int):
+    """查詢過去 N 天（含今天）符合寄件者且解析成功的成交紀錄，回傳依日期排序的 (dt, 股票, 價格) list"""
+    range_start = date.today() - timedelta(days=days - 1)
+    status, data = mail.search(None, "SINCE", imap_date_str(range_start))
+    ids = data[0].split()
+
+    rows = []
+    for eid in ids:
+        status, msg_data = mail.fetch(eid, "(RFC822)")
+        raw = msg_data[0][1]
+        msg = email.message_from_bytes(raw)
+
+        from_addr = msg.get("From", "")
+        if SENDER_FILTER.lower() not in from_addr.lower():
+            continue
+
+        body = get_email_body(msg)
+        name_match = STOCK_NAME_PATTERN.search(body)
+        price_match = PRICE_PATTERN.search(body)
+        if not (name_match and price_match):
+            continue
+
+        try:
+            dt = parsedate_to_datetime(msg.get("Date", ""))
+        except Exception:
+            dt = None
+        rows.append((dt, name_match.group(1), price_match.group(1)))
+
+    rows.sort(key=lambda r: (r[0] is None, r[0]))
+    return rows
+
+
+def build_no_trade_report(rows) -> str:
+    lines = ["📭 今天沒交易", "", "📊 過去7天成交紀錄："]
+    if rows:
+        lines.append("日期 | 股票 | 成交價")
+        for dt, name, price in rows:
+            date_str = dt.strftime("%m/%d") if dt else "?"
+            lines.append(f"{date_str} | {name} | {price}")
+    else:
+        lines.append("（過去7天也沒有交易紀錄）")
+    return "\n".join(lines)
 
 
 def run_debug_check() -> None:
