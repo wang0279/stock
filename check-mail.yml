@@ -1,0 +1,36 @@
+name: Fubon 成交回報監控
+
+on:
+  schedule:
+    # 每天 UTC 07:00 = 台北時間 15:00 觸發（GitHub 排程實際時間可能有數分鐘延遲）
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Debug 測試模式（健檢 Gmail/LINE 連線，並送測試訊息）"
+        type: boolean
+        default: false
+
+jobs:
+  check-mail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run mail check
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          DEBUG_MODE: ${{ github.event.inputs.debug || 'false' }}
+        run: python check_mail_once.py
