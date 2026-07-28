@@ -15,7 +15,6 @@ Debug 模式（環境變數 DEBUG_MODE=true）：
 import imaplib
 import email
 from email.header import decode_header
-from email.utils import parsedate_to_datetime
 from datetime import date, timedelta
 import re
 import os
@@ -29,7 +28,7 @@ LINE_CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER_ID = os.environ["LINE_USER_ID"]
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 
-SENDER_FILTER = "fubon"  # 依實際寄件者網域調整
+SUBJECT_PATTERN = re.compile(r"富邦證券(\d{4})年(\d{1,2})月(\d{1,2})日證券成交回報")
 
 # 先猜測的正則，等你提供實際信件內容後再校準
 STOCK_NAME_PATTERN = re.compile(r"股票名稱[:：]\s*([^\s]+)")
@@ -106,10 +105,10 @@ def check_mail_once() -> None:
 
     sent_count = 0
     for msg in messages:
-        from_addr = msg.get("From", "")
         subject = decode_mime_words(msg.get("Subject", ""))
 
-        if SENDER_FILTER.lower() not in from_addr.lower():
+        subject_match = SUBJECT_PATTERN.search(subject)
+        if not subject_match:
             continue
 
         body = get_email_body(msg)
@@ -124,7 +123,7 @@ def check_mail_once() -> None:
             sent_count += 1
             print("已發送:", text)
         else:
-            print(f"符合寄件者但未能解析內容，主旨: {subject}")
+            print(f"主旨符合但未能解析內容，主旨: {subject}")
             print("---- 原始內文（前 500 字，用來校準正則）----")
             print(body[:500])
             print("--------------------------------------------")
@@ -141,7 +140,8 @@ def check_mail_once() -> None:
 
 
 def fetch_recent_trades(mail, days: int):
-    """查詢過去 N 天（含今天）符合寄件者且解析成功的成交紀錄，回傳依日期排序的 (dt, 股票, 價格) list"""
+    """查詢過去 N 天（含今天）主旨符合成交回報格式、且內文解析成功的紀錄
+    回傳依交易日期排序的 ((year, month, day), 股票, 價格) list"""
     range_start = date.today() - timedelta(days=days - 1)
     status, data = mail.search(None, "SINCE", imap_date_str(range_start))
     ids = data[0].split()
@@ -152,8 +152,9 @@ def fetch_recent_trades(mail, days: int):
         raw = msg_data[0][1]
         msg = email.message_from_bytes(raw)
 
-        from_addr = msg.get("From", "")
-        if SENDER_FILTER.lower() not in from_addr.lower():
+        subject = decode_mime_words(msg.get("Subject", ""))
+        subject_match = SUBJECT_PATTERN.search(subject)
+        if not subject_match:
             continue
 
         body = get_email_body(msg)
@@ -162,13 +163,10 @@ def fetch_recent_trades(mail, days: int):
         if not (name_match and price_match):
             continue
 
-        try:
-            dt = parsedate_to_datetime(msg.get("Date", ""))
-        except Exception:
-            dt = None
-        rows.append((dt, name_match.group(1), price_match.group(1)))
+        y, m, d = (int(g) for g in subject_match.groups())
+        rows.append(((y, m, d), name_match.group(1), price_match.group(1)))
 
-    rows.sort(key=lambda r: (r[0] is None, r[0]))
+    rows.sort(key=lambda r: r[0])
     return rows
 
 
@@ -176,9 +174,8 @@ def build_no_trade_report(rows) -> str:
     lines = ["📭 今天沒交易", "", "📊 過去7天成交紀錄："]
     if rows:
         lines.append("日期 | 股票 | 成交價")
-        for dt, name, price in rows:
-            date_str = dt.strftime("%m/%d") if dt else "?"
-            lines.append(f"{date_str} | {name} | {price}")
+        for (y, m, d), name, price in rows:
+            lines.append(f"{m:02d}/{d:02d} | {name} | {price}")
     else:
         lines.append("（過去7天也沒有交易紀錄）")
     return "\n".join(lines)
@@ -200,12 +197,12 @@ def run_debug_check() -> None:
     for msg in messages:
         from_addr = msg.get("From", "")
         subject = decode_mime_words(msg.get("Subject", ""))
-        is_match = SENDER_FILTER.lower() in from_addr.lower()
+        is_match = bool(SUBJECT_PATTERN.search(subject))
         matched += is_match
-        flag = "✅符合寄件者篩選" if is_match else ""
+        flag = "✅符合主旨格式" if is_match else ""
         print(f"  - 寄件者: {from_addr} | 主旨: {subject} {flag}")
 
-    print(f"✅ 符合寄件者篩選條件（含 '{SENDER_FILTER}'）的信件數: {matched}")
+    print(f"✅ 主旨符合「富邦證券xxxx年xx月xx日證券成交回報」格式的信件數: {matched}")
     mail.logout()
 
     send_line_message(
