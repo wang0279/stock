@@ -30,7 +30,6 @@ import requests
 GMAIL_USER = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 LINE_CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_USER_ID = os.environ["LINE_USER_ID"]
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 
 SUBJECT_PATTERN = re.compile(r"富邦證券(\d{4})年(\d{1,2})月(\d{1,2})日證券成交回報")
@@ -46,12 +45,13 @@ def imap_date_str(d: date) -> str:
 
 
 def send_line_message(text: str) -> None:
-    url = "https://api.line.me/v2/bot/message/push"
+    """廣播給所有已加此 LINE 官方帳號為好友的人（不是只送給單一使用者）"""
+    url = "https://api.line.me/v2/bot/message/broadcast"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
     }
-    payload = {"to": LINE_USER_ID, "messages": [{"type": "text", "text": text}]}
+    payload = {"messages": [{"type": "text", "text": text}]}
     resp = requests.post(url, headers=headers, json=payload, timeout=10)
     if resp.status_code != 200:
         raise RuntimeError(f"LINE 發送失敗: {resp.status_code} {resp.text}")
