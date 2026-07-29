@@ -3,7 +3,7 @@ name: Fubon 成交回報監控
 on:
   schedule:
     # 每天 UTC 07:00 = 台北時間 15:00 觸發（GitHub 排程實際時間可能有數分鐘延遲）
-    - cron: "52 7 * * *"
+    - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
       debug:
@@ -31,5 +31,6 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
           DEBUG_MODE: ${{ github.event.inputs.debug || 'false' }}
         run: python check_mail_once.py
