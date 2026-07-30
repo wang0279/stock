@@ -3,7 +3,7 @@ name: Fubon 成交回報監控
 on:
   schedule:
     # 每天 UTC 07:00 = 台北時間 15:00 觸發（GitHub 排程實際時間可能有數分鐘延遲）
-    - cron: "40 8 * * *"
+    - cron: "30 6 * * *"
   workflow_dispatch:
     inputs:
       debug:
