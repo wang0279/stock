@@ -1,0 +1,24 @@
+name: Fubon 成交回報監控
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 您的排程時間
+  workflow_dispatch: # 手動觸發機制
+
+jobs:
+  # 您原本的 Job
+  check-mail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ... 原本的步驟 ...
+
+  # 新增 Keepalive Job
+  keepalive-job:
+    name: Keepalive Workflow
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # 需要 actions 寫入權限來呼叫 GitHub API
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gautamkrishnar/keepalive-workflow@v2
