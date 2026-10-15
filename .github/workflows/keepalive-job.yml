@@ -12,7 +12,9 @@ jobs:
     permissions:
       actions: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          workflow_files: "check-mail.yml"
+      - name: Keep repository active
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST repos/${{ github.repository }}/actions/workflows/check-mail.yml/disables || true
+          gh api -X PUT repos/${{ github.repository }}/actions/workflows/check-mail.yml/enable
