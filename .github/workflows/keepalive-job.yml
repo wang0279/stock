@@ -1,4 +1,4 @@
-name: Fubon 成交回報監控
+name: workflow_keep_alive
 
 on:
   schedule:
